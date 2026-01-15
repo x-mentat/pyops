@@ -81,10 +81,11 @@ The dashboard supports flexible authentication with LDAP/AD primary and fallback
 - **LDAP_DOMAIN**: Your Windows domain (e.g., `COMPANY`)
 - **LDAP_BASE_DN**: Your domain's base DN (e.g., `DC=company,DC=local`)
 - **LDAP_USER_FILTER**: Search filter for users (default: `(sAMAccountName={username})`)
+- **LDAP_ALLOWED_GROUPS**: Comma-separated list of AD groups allowed to access (optional - leave empty to allow all authenticated users)
 
 ### Example Configurations:
 
-**Production with LDAP + Fallback:**
+**Production with LDAP + Fallback + Group Restriction:**
 ```env
 AUTH_ENABLED=true
 FALLBACK_USERNAME=emergency_admin
@@ -94,6 +95,7 @@ LDAP_PORT=389
 LDAP_USE_SSL=false
 LDAP_DOMAIN=MYCOMPANY
 LDAP_BASE_DN=DC=mycompany,DC=local
+LDAP_ALLOWED_GROUPS=Admins,IT-Team,Monitoring-Users
 ```
 
 **Development (No Authentication):**

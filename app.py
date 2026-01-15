@@ -25,6 +25,7 @@ LDAP_USE_SSL = os.getenv('LDAP_USE_SSL', 'false').lower() == 'true'
 LDAP_DOMAIN = os.getenv('LDAP_DOMAIN')  # e.g., 'COMPANY'
 LDAP_BASE_DN = os.getenv('LDAP_BASE_DN')  # e.g., 'DC=company,DC=local'
 LDAP_USER_FILTER = os.getenv('LDAP_USER_FILTER', '(sAMAccountName={username})')
+LDAP_ALLOWED_GROUPS = os.getenv('LDAP_ALLOWED_GROUPS')  # Comma-separated group names
 
 # Icinga2 API Configuration
 ICINGA_URL = os.getenv('ICINGA_URL')
@@ -122,13 +123,32 @@ def authenticate_ldap(username, password):
             conn.search(
                 search_base=LDAP_BASE_DN,
                 search_filter=search_filter,
-                attributes=['displayName', 'mail', 'sAMAccountName', 'cn']
+                attributes=['displayName', 'mail', 'sAMAccountName', 'cn', 'memberOf']
             )
             
             if conn.entries:
                 entry = conn.entries[0]
                 user_info['display_name'] = str(entry.displayName) if hasattr(entry, 'displayName') else username
                 user_info['email'] = str(entry.mail) if hasattr(entry, 'mail') else None
+                
+                # Check group membership if LDAP_ALLOWED_GROUPS is configured
+                if LDAP_ALLOWED_GROUPS:
+                    allowed_groups = [g.strip() for g in LDAP_ALLOWED_GROUPS.split(',')]
+                    user_groups = []
+                    
+                    if hasattr(entry, 'memberOf'):
+                        # Extract group names from DN format
+                        for group_dn in entry.memberOf:
+                            # Extract CN from DN (e.g., "CN=Admins,OU=Groups,DC=company,DC=local" -> "Admins")
+                            group_parts = str(group_dn).split(',')[0].split('=')
+                            if len(group_parts) > 1:
+                                user_groups.append(group_parts[1])
+                    
+                    # Check if user is in any allowed group
+                    if not any(group in allowed_groups for group in user_groups):
+                        print(f"User {username} not in allowed groups. User groups: {user_groups}, Allowed: {allowed_groups}")
+                        conn.unbind()
+                        return None
         
         conn.unbind()
         return user_info
