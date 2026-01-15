@@ -13,6 +13,11 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
 
+# Application prefix for reverse proxy support
+APP_PREFIX = os.getenv('APP_PREFIX', '').rstrip('/')
+if APP_PREFIX:
+    app.config['APPLICATION_ROOT'] = APP_PREFIX
+
 # Authentication Configuration
 AUTH_ENABLED = os.getenv('AUTH_ENABLED', 'true').lower() == 'true'
 FALLBACK_USERNAME = os.getenv('FALLBACK_USERNAME')
