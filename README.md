@@ -14,13 +14,53 @@ A beautiful and responsive monitoring dashboard for Icinga2 using Flask and the 
 - 👤 User session management
 
 ## Installation
+
 ### Quick Start (Development)
+
 1. Clone or navigate to this directory
 
 2. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+3. Configure your settings - copy `.env.example` to `.env` and edit
+
+4. Run the application:
+
+**Development server:**
+```bash
+python app.py
+```
+
+**Production with Gunicorn:**
+```bash
+gunicorn --config gunicorn_config.py app:app
+```
+
+Access at `http://localhost:5000`
+
+### Gunicorn Configuration
+
+The `gunicorn_config.py` file includes production-ready settings:
+- **Workers**: Auto-calculated (2 × CPU cores + 1)
+- **Bind**: `0.0.0.0:5000`
+- **Timeout**: 30 seconds
+- **Logging**: stdout/stderr for systemd
+
+**Gunicorn command examples:**
+```bash
+# Basic
+gunicorn app:app
+
+# Custom workers and port
+gunicorn --workers 4 --bind 0.0.0.0:8000 app:app
+
+# With config file (recommended)
+gunicorn --config gunicorn_config.py app:app
+```
+
+### Environment Configuration
 
 3. Configure your settings:
    - Copy `.env.example` to `.env`:
@@ -72,9 +112,10 @@ cd /opt/pyops-dashboard
 sudo -u pyops git clone https://github.com/x-mentat/pyops.git .
 ```
 
-4. **Create virtual environment:**
+4. **Create virtual environment and install dependencies:**
 ```bash
 sudo -u pyops python3 -m venv venv
+sudo -u pyops venv/bin/pip install --upgrade pip
 sudo -u pyops venv/bin/pip install -r requirements.txt
 ```
 
@@ -84,7 +125,13 @@ sudo -u pyops cp .env.example .env
 sudo -u pyops nano .env  # Edit with your settings
 ```
 
-6. **Install systemd service:**
+6. **Configure Gunicorn (optional - defaults are in gunicorn_config.py):**
+```bash
+# Edit gunicorn_config.py to adjust workers, timeout, etc.
+sudo -u pyops nano gunicorn_config.py
+```
+
+7. **Install systemd service:**
 ```bash
 sudo cp pyops-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -92,13 +139,20 @@ sudo systemctl enable pyops-dashboard
 sudo systemctl start pyops-dashboard
 ```
 
-7. **Check status:**
+8. **Check status:**
 ```bash
 sudo systemctl status pyops-dashboard
 sudo journalctl -u pyops-dashboard -f  # View logs
 ```
 
-8. **Setup reverse proxy (nginx example):**
+9. **Manage the service:**
+```bash
+sudo systemctl restart pyops-dashboard  # Restart
+sudo systemctl reload pyops-dashboard   # Reload (graceful)
+sudo systemctl stop pyops-dashboard     # Stop
+```
+
+10. **Setup reverse proxy (nginx example):**
 ```nginx
 server {
     listen 80;

@@ -3,12 +3,15 @@ Description=PyOPS Icinga2 Dashboard
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
 User=pyops
 Group=pyops
 WorkingDirectory=/opt/pyops-dashboard
 Environment="PATH=/opt/pyops-dashboard/venv/bin"
-ExecStart=/opt/pyops-dashboard/venv/bin/python app.py
+ExecStart=/opt/pyops-dashboard/venv/bin/gunicorn --config gunicorn_config.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGQUIT
 Restart=always
 RestartSec=10
 
