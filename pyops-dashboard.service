@@ -1,0 +1,29 @@
+[Unit]
+Description=PyOPS Icinga2 Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=pyops
+Group=pyops
+WorkingDirectory=/opt/pyops-dashboard
+Environment="PATH=/opt/pyops-dashboard/venv/bin"
+ExecStart=/opt/pyops-dashboard/venv/bin/python app.py
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pyops-dashboard
+CapabilityBoundingSet=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pyops-dashboard
+
+[Install]
+WantedBy=multi-user.target

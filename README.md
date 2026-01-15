@@ -14,7 +14,7 @@ A beautiful and responsive monitoring dashboard for Icinga2 using Flask and the 
 - 👤 User session management
 
 ## Installation
-
+### Quick Start (Development)
 1. Clone or navigate to this directory
 
 2. Install Python dependencies:
@@ -50,6 +50,69 @@ pip install -r requirements.txt
      # Flask
      SECRET_KEY=your-random-secret-key-here
      ```
+
+### Production Setup with systemd
+
+For production deployment with a dedicated non-login user:
+
+1. **Create dedicated user:**
+```bash
+sudo useradd -r -s /bin/false pyops
+```
+
+2. **Setup application directory:**
+```bash
+sudo mkdir -p /opt/pyops-dashboard
+sudo chown pyops:pyops /opt/pyops-dashboard
+```
+
+3. **Clone and setup the application:**
+```bash
+cd /opt/pyops-dashboard
+sudo -u pyops git clone https://github.com/x-mentat/pyops.git .
+```
+
+4. **Create virtual environment:**
+```bash
+sudo -u pyops python3 -m venv venv
+sudo -u pyops venv/bin/pip install -r requirements.txt
+```
+
+5. **Configure environment:**
+```bash
+sudo -u pyops cp .env.example .env
+sudo -u pyops nano .env  # Edit with your settings
+```
+
+6. **Install systemd service:**
+```bash
+sudo cp pyops-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable pyops-dashboard
+sudo systemctl start pyops-dashboard
+```
+
+7. **Check status:**
+```bash
+sudo systemctl status pyops-dashboard
+sudo journalctl -u pyops-dashboard -f  # View logs
+```
+
+8. **Setup reverse proxy (nginx example):**
+```nginx
+server {
+    listen 80;
+    server_name monitoring.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
 
 ## Authentication Configuration
 
