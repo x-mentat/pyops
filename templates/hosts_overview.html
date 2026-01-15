@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hosts Overview - PyOPS Icinga2 Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --color-ok: #28a745;
+            --color-warning: #ffc107;
+            --color-critical: #dc3545;
+            --color-unknown: #6c757d;
+            --color-unreachable: #17a2b8;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .overview-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .header-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .filter-pill {
+            padding: 10px 20px;
+            border-radius: 25px;
+            border: 2px solid white;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .filter-pill:hover {
+            background-color: white;
+            color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .filter-pill.active {
+            background-color: white;
+            color: #667eea;
+        }
+
+        .host-card {
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 5px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+
+        .host-card:hover {
+            transform: translateX(10px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .host-card.up {
+            border-left-color: var(--color-ok);
+        }
+
+        .host-card.down {
+            border-left-color: var(--color-critical);
+        }
+
+        .host-card.unreachable {
+            border-left-color: var(--color-unreachable);
+        }
+
+        .host-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .host-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .host-status.up {
+            background-color: var(--color-ok);
+            color: white;
+        }
+
+        .host-status.down {
+            background-color: var(--color-critical);
+            color: white;
+        }
+
+        .host-status.unreachable {
+            background-color: var(--color-unreachable);
+            color: white;
+        }
+
+        .host-info {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #6c757d;
+        }
+
+        .host-output {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+            color: white;
+        }
+
+        .no-hosts {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            color: white;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .service-count-badge {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="overview-container">
+        <!-- Back Button -->
+        <a href="/" class="btn btn-light" style="position: fixed; top: 30px; left: 30px; z-index: 1000; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+        
+        <!-- Logout Button -->
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-light" style="position: fixed; top: 30px; right: 30px; z-index: 1000; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+
+        <!-- Header -->
+        <div class="card header-card">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h1 class="mb-0">
+                    <i class="bi bi-server"></i> <span id="pageTitle">Hosts Overview</span>
+                </h1>
+                <div class="text-end text-white">
+                    <i class="bi bi-person-circle"></i> {{ current_user.display_name }}
+                </div>
+            </div>
+            
+            <!-- Filter Pills -->
+            <div class="filter-pills">
+                <a href="/hosts/all" class="filter-pill {{ 'active' if state_filter == 'all' else '' }}">
+                    <i class="bi bi-list"></i> All Hosts
+                </a>
+                <a href="/hosts/up" class="filter-pill {{ 'active' if state_filter == 'up' else '' }}">
+                    <i class="bi bi-check-circle"></i> Up
+                </a>
+                <a href="/hosts/down" class="filter-pill {{ 'active' if state_filter == 'down' else '' }}">
+                    <i class="bi bi-x-circle"></i> Down
+                </a>
+                <a href="/hosts/unreachable" class="filter-pill {{ 'active' if state_filter == 'unreachable' else '' }}">
+                    <i class="bi bi-exclamation-triangle"></i> Unreachable
+                </a>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <div class="stat-number" id="statTotal">-</div>
+                    <div class="stat-label">Total</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="statUp">-</div>
+                    <div class="stat-label">Up</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number pulse" id="statDown">-</div>
+                    <div class="stat-label">Down</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="statUnreachable">-</div>
+                    <div class="stat-label">Unreachable</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="loading-spinner">
+            <div class="spinner-border text-light" style="width: 4rem; height: 4rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Loading hosts...</p>
+        </div>
+
+        <!-- Hosts List -->
+        <div id="hostsList" style="display: none;">
+            <!-- Will be populated by JavaScript -->
+        </div>
+
+        <!-- Last Updated -->
+        <div class="text-light text-end" id="lastUpdated" style="display: none;">
+            Last updated: <span id="updateTime">-</span>
+        </div>
+    </div>
+
+    <!-- Refresh Button -->
+    <button class="btn btn-primary refresh-btn" onclick="loadHosts()" title="Refresh Data">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const stateFilter = "{{ state_filter }}";
+
+        function getStateInfo(state) {
+            const states = {
+                0: { name: 'UP', class: 'up', icon: 'check-circle-fill' },
+                1: { name: 'DOWN', class: 'down', icon: 'x-circle-fill' },
+                2: { name: 'UNREACHABLE', class: 'unreachable', icon: 'exclamation-triangle-fill' }
+            };
+            return states[state] || states[0];
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'Never';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return 'N/A';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            let result = [];
+            if (days > 0) result.push(`${days}d`);
+            if (hours > 0) result.push(`${hours}h`);
+            if (minutes > 0) result.push(`${minutes}m`);
+            
+            return result.join(' ') || '< 1m';
+        }
+
+        async function loadHosts() {
+            try {
+                const response = await fetch(`/api/hosts/filter/${stateFilter}`);
+                const hosts = await response.json();
+                
+                updatePageTitle();
+                updateStats(hosts);
+                displayHosts(hosts);
+                
+                // Show content, hide spinner
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('hostsList').style.display = 'block';
+                document.getElementById('lastUpdated').style.display = 'block';
+                
+                // Update timestamp
+                document.getElementById('updateTime').textContent = new Date().toLocaleString();
+            } catch (error) {
+                console.error('Error loading hosts:', error);
+                showError('Error loading hosts');
+            }
+        }
+
+        function updatePageTitle() {
+            const titles = {
+                'all': 'All Hosts',
+                'up': 'Hosts Up',
+                'down': 'Hosts Down',
+                'unreachable': 'Unreachable Hosts'
+            };
+            document.getElementById('pageTitle').textContent = titles[stateFilter] || 'Hosts Overview';
+        }
+
+        function updateStats(hosts) {
+            let stats = { total: 0, up: 0, down: 0, unreachable: 0 };
+            
+            hosts.forEach(host => {
+                stats.total++;
+                const state = host.attrs.state;
+                if (state === 0) stats.up++;
+                else if (state === 1) stats.down++;
+                else if (state === 2) stats.unreachable++;
+            });
+
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statUp').textContent = stats.up;
+            document.getElementById('statDown').textContent = stats.down;
+            document.getElementById('statUnreachable').textContent = stats.unreachable;
+        }
+
+        function displayHosts(hosts) {
+            const hostsListDiv = document.getElementById('hostsList');
+            
+            if (hosts.length === 0) {
+                hostsListDiv.innerHTML = `
+                    <div class="card">
+                        <div class="no-hosts">
+                            <i class="bi bi-inbox" style="font-size: 4rem;"></i>
+                            <h3>No hosts found</h3>
+                            <p>There are no hosts matching the selected filter.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort hosts by state (problems first), then by name
+            hosts.sort((a, b) => {
+                if (a.attrs.state !== b.attrs.state) {
+                    return b.attrs.state - a.attrs.state;
+                }
+                return (a.attrs.name || '').localeCompare(b.attrs.name || '');
+            });
+
+            let html = '<div class="card"><div class="card-body p-3">';
+            
+            hosts.forEach(host => {
+                const attrs = host.attrs;
+                const stateInfo = getStateInfo(attrs.state);
+                const lastCheck = formatTimestamp(attrs.last_check);
+                const lastStateChange = attrs.last_state_change 
+                    ? new Date(attrs.last_state_change * 1000)
+                    : null;
+                const stateDuration = lastStateChange 
+                    ? formatDuration((Date.now() - lastStateChange.getTime()) / 1000)
+                    : 'N/A';
+                const output = attrs.last_check_result?.output || 'No output available';
+                
+                html += `
+                    <div class="host-card ${stateInfo.class}" onclick="window.location.href='/host/${encodeURIComponent(attrs.name)}'">
+                        <div class="host-title">
+                            <i class="bi bi-${stateInfo.icon}"></i>
+                            ${attrs.display_name || attrs.name}
+                            <span class="host-status ${stateInfo.class}">${stateInfo.name}</span>
+                        </div>
+                        
+                        <div class="host-info">
+                            <div class="info-item">
+                                <i class="bi bi-geo-alt"></i>
+                                <span>${attrs.address || 'No address'}</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="bi bi-clock"></i>
+                                <span>Last check: ${lastCheck}</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="bi bi-hourglass-split"></i>
+                                <span>In this state: ${stateDuration}</span>
+                            </div>
+                            ${attrs.acknowledgement > 0 ? '<div class="info-item"><i class="bi bi-check2-square"></i><span>Acknowledged</span></div>' : ''}
+                            ${attrs.downtime_depth > 0 ? '<div class="info-item"><i class="bi bi-pause-circle"></i><span>In Downtime</span></div>' : ''}
+                        </div>
+                        
+                        <div class="host-output">
+                            <strong>Output:</strong> ${output}
+                        </div>
+                        
+                        <div class="mt-2">
+                            <a href="/host/${encodeURIComponent(attrs.name)}" class="btn btn-sm btn-primary" onclick="event.stopPropagation();">
+                                <i class="bi bi-arrow-right"></i> View Details
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+            hostsListDiv.innerHTML = html;
+        }
+
+        function showError(message) {
+            document.getElementById('loadingSpinner').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+
+        // Load data on page load
+        loadHosts();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadHosts, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Details - {{ hostname }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --color-ok: #28a745;
+            --color-warning: #ffc107;
+            --color-critical: #dc3545;
+            --color-unknown: #6c757d;
+            --color-unreachable: #17a2b8;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .details-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .header-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        .status-badge {
+            font-size: 1.5rem;
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: inline-block;
+            margin: 10px 0;
+        }
+
+        .status-up { background-color: var(--color-ok); color: white; }
+        .status-down { background-color: var(--color-critical); color: white; }
+        .status-unreachable { background-color: var(--color-unreachable); color: white; }
+
+        .info-row {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+        }
+
+        .service-item {
+            padding: 15px;
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+
+        .service-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .service-item.ok { border-left-color: var(--color-ok); }
+        .service-item.warning { border-left-color: var(--color-warning); }
+        .service-item.critical { border-left-color: var(--color-critical); }
+        .service-item.unknown { border-left-color: var(--color-unknown); }
+
+        .metric-card {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .performance-data {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #dee2e6;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -35px;
+            top: 5px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--color-ok);
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="details-container">
+        <!-- Back Button -->
+        <a href="/" class="btn btn-light" style="position: fixed; top: 30px; left: 30px; z-index: 1000; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+        
+        <!-- Logout Button -->
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-light" style="position: fixed; top: 30px; right: 30px; z-index: 1000; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="loading-spinner">
+            <div class="spinner-border text-light" style="width: 4rem; height: 4rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-light mt-3">Loading host details...</p>
+        </div>
+
+        <!-- Content (hidden initially) -->
+        <div id="contentArea" style="display: none;">
+            <!-- Header -->
+            <div class="card header-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="mb-2">
+                            <i class="bi bi-server"></i> <span id="hostName">{{ hostname }}</span>
+                        </h1>
+                        <div id="hostStatus"></div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-light mb-2">
+                            <i class="bi bi-person-circle"></i> {{ current_user.display_name }}
+                        </div>
+                    <div id="hostAddress" class="text-end"></div>
+                </div>
+            </div>
+
+            <!-- Host Metrics -->
+            <div class="row" id="metricsRow">
+                <div class="col-md-3">
+                    <div class="card metric-card">
+                        <div class="metric-label">State</div>
+                        <div class="metric-value" id="metricState">-</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card">
+                        <div class="metric-label">Total Services</div>
+                        <div class="metric-value" id="metricTotalServices">-</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card">
+                        <div class="metric-label">Services OK</div>
+                        <div class="metric-value status-ok" id="metricServicesOk">-</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card">
+                        <div class="metric-label">Problems</div>
+                        <div class="metric-value status-critical pulse" id="metricProblems">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Host Information -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="bi bi-info-circle"></i> Host Information</h5>
+                        </div>
+                        <div class="card-body p-0" id="hostInfo">
+                            <!-- Will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Check Information</h5>
+                        </div>
+                        <div class="card-body p-0" id="checkInfo">
+                            <!-- Will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Check Output -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-terminal"></i> Last Check Output</h5>
+                </div>
+                <div class="card-body">
+                    <div id="checkOutput" class="alert alert-secondary mb-0"></div>
+                    <div id="perfData"></div>
+                </div>
+            </div>
+
+            <!-- Services -->
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i> Services (<span id="serviceCount">0</span>)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="servicesList">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Last Updated -->
+        <div class="text-light text-end" id="lastUpdated" style="display: none;">
+            Last updated: <span id="updateTime">-</span>
+        </div>
+    </div>
+
+    <!-- Refresh Button -->
+    <button class="btn btn-primary refresh-btn" onclick="loadHostDetails()" title="Refresh Data">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const hostname = {{ hostname | tojson }};
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return 'N/A';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            let result = [];
+            if (days > 0) result.push(`${days}d`);
+            if (hours > 0) result.push(`${hours}h`);
+            if (minutes > 0) result.push(`${minutes}m`);
+            
+            return result.join(' ') || '< 1m';
+        }
+
+        function getStateInfo(state) {
+            const states = {
+                0: { name: 'UP', class: 'status-up', icon: 'check-circle-fill' },
+                1: { name: 'DOWN', class: 'status-down', icon: 'x-circle-fill' },
+                2: { name: 'UNREACHABLE', class: 'status-unreachable', icon: 'exclamation-triangle-fill' }
+            };
+            return states[state] || states[0];
+        }
+
+        function getServiceStateInfo(state) {
+            const states = {
+                0: { name: 'OK', class: 'ok', badge: 'bg-success' },
+                1: { name: 'WARNING', class: 'warning', badge: 'bg-warning text-dark' },
+                2: { name: 'CRITICAL', class: 'critical', badge: 'bg-danger' },
+                3: { name: 'UNKNOWN', class: 'unknown', badge: 'bg-secondary' }
+            };
+            return states[state] || states[3];
+        }
+
+        async function loadHostDetails() {
+            try {
+                const response = await fetch(`/api/host/${encodeURIComponent(hostname)}`);
+                const data = await response.json();
+                
+                if (data.host) {
+                    updateHostInfo(data.host);
+                    updateServices(data.services);
+                    
+                    // Show content, hide spinner
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    document.getElementById('contentArea').style.display = 'block';
+                    document.getElementById('lastUpdated').style.display = 'block';
+                    
+                    // Update timestamp
+                    document.getElementById('updateTime').textContent = new Date().toLocaleString();
+                } else {
+                    showError('Host not found');
+                }
+            } catch (error) {
+                console.error('Error loading host details:', error);
+                showError('Error loading host details');
+            }
+        }
+
+        function updateHostInfo(hostData) {
+            const attrs = hostData.attrs;
+            const stateInfo = getStateInfo(attrs.state);
+            
+            // Update header
+            document.getElementById('hostName').textContent = attrs.name || hostname;
+            document.getElementById('hostStatus').innerHTML = `
+                <span class="status-badge ${stateInfo.class}">
+                    <i class="bi bi-${stateInfo.icon}"></i> ${stateInfo.name}
+                </span>
+            `;
+            
+            if (attrs.address) {
+                document.getElementById('hostAddress').innerHTML = `
+                    <div class="text-light"><i class="bi bi-geo-alt"></i> ${attrs.address}</div>
+                `;
+            }
+            
+            // Update metrics
+            document.getElementById('metricState').innerHTML = `<span class="${stateInfo.class}">${stateInfo.name}</span>`;
+            
+            // Host Information
+            const hostInfoHtml = `
+                <div class="info-row">
+                    <div class="info-label">Display Name</div>
+                    <div class="info-value">${attrs.display_name || attrs.name}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Address</div>
+                    <div class="info-value">${attrs.address || 'N/A'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Check Command</div>
+                    <div class="info-value"><code>${attrs.check_command || 'N/A'}</code></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Check Interval</div>
+                    <div class="info-value">${attrs.check_interval ? attrs.check_interval + 's' : 'N/A'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">State Type</div>
+                    <div class="info-value">${attrs.state_type === 1 ? 'HARD' : 'SOFT'}</div>
+                </div>
+            `;
+            document.getElementById('hostInfo').innerHTML = hostInfoHtml;
+            
+            // Check Information
+            const lastCheck = attrs.last_check ? formatTimestamp(attrs.last_check) : 'N/A';
+            const nextCheck = attrs.next_check ? formatTimestamp(attrs.next_check) : 'N/A';
+            const lastStateChange = attrs.last_state_change ? formatTimestamp(attrs.last_state_change) : 'N/A';
+            const downtime = attrs.downtime_depth > 0 ? 'Yes' : 'No';
+            const acknowledged = attrs.acknowledgement > 0 ? 'Yes' : 'No';
+            
+            const checkInfoHtml = `
+                <div class="info-row">
+                    <div class="info-label">Last Check</div>
+                    <div class="info-value">${lastCheck}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Next Check</div>
+                    <div class="info-value">${nextCheck}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Last State Change</div>
+                    <div class="info-value">${lastStateChange}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Check Attempt</div>
+                    <div class="info-value">${attrs.check_attempt || 0} / ${attrs.max_check_attempts || 0}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">In Downtime</div>
+                    <div class="info-value">${downtime}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Acknowledged</div>
+                    <div class="info-value">${acknowledged}</div>
+                </div>
+            `;
+            document.getElementById('checkInfo').innerHTML = checkInfoHtml;
+            
+            // Check Output
+            const output = attrs.last_check_result?.output || 'No output available';
+            document.getElementById('checkOutput').textContent = output;
+            
+            // Performance Data
+            if (attrs.last_check_result?.performance_data && attrs.last_check_result.performance_data.length > 0) {
+                const perfHtml = `
+                    <div class="performance-data mt-3">
+                        <strong>Performance Data:</strong><br>
+                        ${attrs.last_check_result.performance_data.join('<br>')}
+                    </div>
+                `;
+                document.getElementById('perfData').innerHTML = perfHtml;
+            }
+        }
+
+        function updateServices(services) {
+            document.getElementById('serviceCount').textContent = services.length;
+            
+            if (services.length === 0) {
+                document.getElementById('servicesList').innerHTML = 
+                    '<p class="text-muted text-center">No services configured for this host</p>';
+                document.getElementById('metricTotalServices').textContent = '0';
+                document.getElementById('metricServicesOk').textContent = '0';
+                document.getElementById('metricProblems').textContent = '0';
+                return;
+            }
+            
+            // Calculate service stats
+            let okCount = 0, problemCount = 0;
+            services.forEach(service => {
+                if (service.attrs.state === 0) okCount++;
+                else problemCount++;
+            });
+            
+            document.getElementById('metricTotalServices').textContent = services.length;
+            document.getElementById('metricServicesOk').textContent = okCount;
+            document.getElementById('metricProblems').textContent = problemCount;
+            
+            // Sort services: problems first, then by name
+            services.sort((a, b) => {
+                if (a.attrs.state !== b.attrs.state) {
+                    return b.attrs.state - a.attrs.state;
+                }
+                return (a.attrs.display_name || a.attrs.name).localeCompare(b.attrs.display_name || b.attrs.name);
+            });
+            
+            let html = '';
+            services.forEach(service => {
+                const attrs = service.attrs;
+                const stateInfo = getServiceStateInfo(attrs.state);
+                const output = attrs.last_check_result?.output || 'No output';
+                const lastCheck = attrs.last_check ? formatTimestamp(attrs.last_check) : 'Never';
+                const serviceLink = `/service/${encodeURIComponent(attrs.host_name)}/${encodeURIComponent(attrs.name)}`;
+                
+                html += `
+                    <div class="service-item ${stateInfo.class}" style="cursor: pointer;" onclick="window.location.href='${serviceLink}'">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <strong>${attrs.display_name || attrs.name}</strong>
+                                <span class="badge ${stateInfo.badge} ms-2">${stateInfo.name}</span>
+                                <a href="${serviceLink}" class="btn btn-sm btn-outline-primary float-end" onclick="event.stopPropagation();">
+                                    <i class="bi bi-arrow-right"></i> Details
+                                </a>
+                                <br>
+                                <small class="text-muted">${output}</small>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i> Last check: ${lastCheck}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('servicesList').innerHTML = html;
+        }
+
+        function showError(message) {
+            document.getElementById('loadingSpinner').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> ${message}
+                </div>
+                <a href="/" class="btn btn-primary">Back to Dashboard</a>
+            `;
+        }
+
+        // Load data on page load
+        loadHostDetails();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadHostDetails, 30000);
+    </script>
+</body>
+</html>

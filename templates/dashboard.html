@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyOPS Icinga2 Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --color-ok: #28a745;
+            --color-warning: #ffc107;
+            --color-critical: #dc3545;
+            --color-unknown: #6c757d;
+            --color-unreachable: #17a2b8;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: none;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card {
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-ok { color: var(--color-ok); }
+        .status-warning { color: var(--color-warning); }
+        .status-critical { color: var(--color-critical); }
+        .status-unknown { color: var(--color-unknown); }
+        .status-unreachable { color: var(--color-unreachable); }
+
+        .bg-ok { background-color: var(--color-ok); }
+        .bg-warning { background-color: var(--color-warning); }
+        .bg-critical { background-color: var(--color-critical); }
+        .bg-unknown { background-color: var(--color-unknown); }
+
+        .header-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        .problem-item {
+            padding: 15px;
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+
+        .problem-item.critical {
+            border-left-color: var(--color-critical);
+        }
+
+        .problem-item.warning {
+            border-left-color: var(--color-warning);
+        }
+
+        .problem-item.unknown {
+            border-left-color: var(--color-unknown);
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .spinner-container {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading .spinner-container {
+            display: block;
+        }
+
+        .loading .content {
+            opacity: 0.5;
+        }
+
+        .badge-state {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .table-responsive {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .last-updated {
+            text-align: right;
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="card header-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="mb-0">
+                        <i class="bi bi-speedometer2"></i> PyOPS Icinga2 Dashboard
+                    </h1>
+                    <p class="mb-0 mt-2">Real-time infrastructure monitoring</p>
+                </div>
+                <div class="text-end">
+                    <div class="mb-2">
+                        <i class="bi bi-person-circle"></i> 
+                        <span>{{ current_user.display_name }}</span>
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="btn btn-light btn-sm">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Overview -->
+        <div class="row" id="statsContainer">
+            <div class="col-md-3 col-sm-6">
+                <a href="/hosts/all" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Total Hosts</div>
+                        <div class="stat-number" id="totalHosts">-</div>
+                        <div class="progress" style="height: 5px;">
+                            <div class="progress-bar bg-ok" id="hostsUpBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/hosts/up" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Hosts Up</div>
+                        <div class="stat-number status-ok" id="hostsUp">-</div>
+                        <small class="text-muted">Online</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/hosts/down" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Hosts Down</div>
+                        <div class="stat-number status-critical pulse" id="hostsDown">-</div>
+                        <small class="text-muted">Offline</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/hosts/unreachable" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Unreachable</div>
+                        <div class="stat-number status-unreachable" id="hostsUnreachable">-</div>
+                        <small class="text-muted">Network Issues</small>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Service Statistics -->
+        <div class="row">
+            <div class="col-md-3 col-sm-6">
+                <a href="/services/all" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Total Services</div>
+                        <div class="stat-number" id="totalServices">-</div>
+                        <div class="progress" style="height: 5px;">
+                            <div class="progress-bar bg-ok" id="servicesOkBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/services/ok" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Services OK</div>
+                        <div class="stat-number status-ok" id="servicesOk">-</div>
+                        <small class="text-muted">Healthy</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/services/warning" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Warning</div>
+                        <div class="stat-number status-warning" id="servicesWarning">-</div>
+                        <small class="text-muted">Needs Attention</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <a href="/services/critical" style="text-decoration: none; color: inherit;">
+                    <div class="card stat-card">
+                        <div class="stat-label">Critical</div>
+                        <div class="stat-number status-critical pulse" id="servicesCritical">-</div>
+                        <small class="text-muted">Urgent</small>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Problems Section -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Host Problems</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="hostProblems" class="table-responsive">
+                            <div class="spinner-container">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Service Problems</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="serviceProblems" class="table-responsive">
+                            <div class="spinner-container">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Last Updated -->
+        <div class="last-updated">
+            Last updated: <span id="lastUpdated">-</span>
+        </div>
+    </div>
+
+    <!-- Refresh Button -->
+    <button class="btn btn-primary refresh-btn" onclick="refreshData()" title="Refresh Data">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let autoRefreshInterval;
+
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                updateStats(data);
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        async function fetchProblems() {
+            try {
+                const response = await fetch('/api/problems');
+                const data = await response.json();
+                updateProblems(data);
+            } catch (error) {
+                console.error('Error fetching problems:', error);
+            }
+        }
+
+        function updateStats(data) {
+            // Host stats
+            document.getElementById('totalHosts').textContent = data.hosts.total;
+            document.getElementById('hostsUp').textContent = data.hosts.up;
+            document.getElementById('hostsDown').textContent = data.hosts.down;
+            document.getElementById('hostsUnreachable').textContent = data.hosts.unreachable;
+            
+            // Host progress bar
+            const hostsUpPercentage = data.hosts.total > 0 
+                ? (data.hosts.up / data.hosts.total) * 100 
+                : 0;
+            document.getElementById('hostsUpBar').style.width = hostsUpPercentage + '%';
+
+            // Service stats
+            document.getElementById('totalServices').textContent = data.services.total;
+            document.getElementById('servicesOk').textContent = data.services.ok;
+            document.getElementById('servicesWarning').textContent = data.services.warning;
+            document.getElementById('servicesCritical').textContent = data.services.critical;
+
+            // Service progress bar
+            const servicesOkPercentage = data.services.total > 0 
+                ? (data.services.ok / data.services.total) * 100 
+                : 0;
+            document.getElementById('servicesOkBar').style.width = servicesOkPercentage + '%';
+        }
+
+        function updateProblems(data) {
+            // Host problems
+            const hostProblemsDiv = document.getElementById('hostProblems');
+            if (data.hosts.length === 0) {
+                hostProblemsDiv.innerHTML = '<p class="text-muted text-center">No host problems detected! 🎉</p>';
+            } else {
+                let html = '';
+                data.hosts.forEach(host => {
+                    const attrs = host.attrs;
+                    const state = attrs.state;
+                    const stateClass = state === 1 ? 'critical' : 'unknown';
+                    const stateName = state === 1 ? 'DOWN' : 'UNREACHABLE';
+                    const hostLink = `/host/${encodeURIComponent(attrs.name)}`;
+                    
+                    html += `
+                        <div class="problem-item ${stateClass}" style="cursor: pointer;" onclick="window.location.href='${hostLink}'">
+                            <strong>${attrs.name}</strong>
+                            <span class="badge bg-danger float-end">${stateName}</span>
+                            <a href="${hostLink}" class="btn btn-sm btn-outline-primary float-end me-2">
+                                <i class="bi bi-arrow-right"></i> Details
+                            </a>
+                            <br>
+                            <small class="text-muted">
+                                ${attrs.last_check_result?.output || 'No output available'}
+                            </small>
+                        </div>
+                    `;
+                });
+                hostProblemsDiv.innerHTML = html;
+            }
+
+            // Service problems
+            const serviceProblemsDiv = document.getElementById('serviceProblems');
+            if (data.services.length === 0) {
+                serviceProblemsDiv.innerHTML = '<p class="text-muted text-center">No service problems detected! 🎉</p>';
+            } else {
+                let html = '';
+                data.services.forEach(service => {
+                    const attrs = service.attrs;
+                    const state = attrs.state;
+                    let stateClass, stateName, badgeClass;
+                    
+                    if (state === 1) {
+                        stateClass = 'warning';
+                        stateName = 'WARNING';
+                        badgeClass = 'bg-warning text-dark';
+                    } else if (state === 2) {
+                        stateClass = 'critical';
+                        stateName = 'CRITICAL';
+                        badgeClass = 'bg-danger';
+                    } else {
+                        stateClass = 'unknown';
+                        stateName = 'UNKNOWN';
+                        badgeClass = 'bg-secondary';
+                    }
+                    
+                    const serviceLink = `/service/${encodeURIComponent(attrs.host_name)}/${encodeURIComponent(attrs.name)}`;
+                    
+                    html += `
+                        <div class="problem-item ${stateClass}" style="cursor: pointer;" onclick="window.location.href='${serviceLink}'">
+                            <strong>${attrs.host_name}</strong> - ${attrs.name}
+                            <span class="badge ${badgeClass} float-end">${stateName}</span>
+                            <a href="${serviceLink}" class="btn btn-sm btn-outline-primary float-end me-2" onclick="event.stopPropagation();">
+                                <i class="bi bi-arrow-right"></i> Details
+                            </a>
+                            <br>
+                            <small class="text-muted">
+                                ${attrs.last_check_result?.output || 'No output available'}
+                            </small>
+                        </div>
+                    `;
+                });
+                serviceProblemsDiv.innerHTML = html;
+            }
+        }
+
+        function updateLastUpdated() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent = now.toLocaleString();
+        }
+
+        async function refreshData() {
+            updateLastUpdated();
+            await Promise.all([fetchStats(), fetchProblems()]);
+        }
+
+        // Initial load
+        refreshData();
+
+        // Auto-refresh every 30 seconds
+        autoRefreshInterval = setInterval(refreshData, 30000);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
