@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, Blueprint
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import requests
 from requests.auth import HTTPBasicAuth
@@ -9,14 +9,17 @@ from ldap3 import Server, Connection, ALL, NTLM
 
 load_dotenv()
 
+# Application prefix for reverse proxy support
+APP_PREFIX = os.getenv('APP_PREFIX', '').rstrip('/')
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
-
-# Application prefix for reverse proxy support
-APP_PREFIX = os.getenv('APP_PREFIX', '').rstrip('/')
 if APP_PREFIX:
     app.config['APPLICATION_ROOT'] = APP_PREFIX
+
+# Create blueprint with prefix support
+bp = Blueprint('main', __name__, url_prefix=APP_PREFIX if APP_PREFIX else None)
 
 # Authentication Configuration
 AUTH_ENABLED = os.getenv('AUTH_ENABLED', 'true').lower() == 'true'
@@ -40,7 +43,7 @@ ICINGA_PASSWORD = os.getenv('ICINGA_PASSWORD')
 # Flask-Login setup
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'main.login'
 login_manager.login_message = 'Please log in to access this page.'
 
 
@@ -79,7 +82,7 @@ def optional_login_required(f):
                 session['user_data'] = {'username': 'guest', 'display_name': 'Guest User', 'email': None}
                 login_user(user)
             else:
-                return redirect(url_for('login', next=request.url))
+                return redirect(url_for('main.login', next=request.url))
         elif not AUTH_ENABLED and not current_user.is_authenticated:
             # Auto-login as guest when auth is disabled
             user = User(username='guest', display_name='Guest User')
@@ -327,7 +330,7 @@ class Icinga2API:
 icinga = Icinga2API(ICINGA_URL, ICINGA_USER, ICINGA_PASSWORD)
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Login page"""
     # If authentication is disabled, auto-login as guest
@@ -335,10 +338,10 @@ def login():
         user = User(username='guest', display_name='Guest User')
         session['user_data'] = {'username': 'guest', 'display_name': 'Guest User', 'email': None}
         login_user(user)
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('main.dashboard'))
     
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('main.dashboard'))
     
     if request.method == 'POST':
         username = request.form.get('username')
@@ -382,24 +385,24 @@ def login():
             
             # Redirect to next page or dashboard
             next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            return redirect(next_page) if next_page else redirect(url_for('main.dashboard'))
         else:
             flash('Invalid username or password. Please try again.', 'danger')
     
     return render_template('login.html', auth_enabled=AUTH_ENABLED)
 
 
-@app.route('/logout')
+@bp.route('/logout')
 @login_required
 def logout():
     """Logout user"""
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
+    return redirect(url_for('main.login'))
 
 
-@app.route('/')
+@bp.route('/')
 def dashboard():
     """Main dashboard page"""
     # If authentication is disabled, allow direct access
@@ -410,12 +413,12 @@ def dashboard():
             session['user_data'] = {'username': 'guest', 'display_name': 'Guest User', 'email': None}
             login_user(user)
     elif not current_user.is_authenticated:
-        return redirect(url_for('login'))
+        return redirect(url_for('main.login'))
     
     return render_template('dashboard.html')
 
 
-@app.route('/api/stats')
+@bp.route('/api/stats')
 @optional_login_required
 def api_stats():
     """Get statistics"""
@@ -423,7 +426,7 @@ def api_stats():
     return jsonify(stats)
 
 
-@app.route('/api/hosts')
+@bp.route('/api/hosts')
 @optional_login_required
 def api_hosts():
     """Get all hosts"""
@@ -431,7 +434,7 @@ def api_hosts():
     return jsonify(hosts)
 
 
-@app.route('/api/services')
+@bp.route('/api/services')
 @optional_login_required
 def api_services():
     """Get all services"""
@@ -439,7 +442,7 @@ def api_services():
     return jsonify(services)
 
 
-@app.route('/api/problems')
+@bp.route('/api/problems')
 @optional_login_required
 def api_problems():
     """Get all problems"""
@@ -451,15 +454,15 @@ def api_problems():
     })
 
 
-@app.route('/hosts')
-@app.route('/hosts/<state_filter>')
+@bp.route('/hosts')
+@bp.route('/hosts/<state_filter>')
 @optional_login_required
 def hosts_overview(state_filter='all'):
     """Hosts overview page filtered by state"""
     return render_template('hosts_overview.html', state_filter=state_filter)
 
 
-@app.route('/api/hosts/filter/<state_filter>')
+@bp.route('/api/hosts/filter/<state_filter>')
 @optional_login_required
 def api_hosts_filtered(state_filter):
     """Get hosts filtered by state"""
@@ -479,15 +482,15 @@ def api_hosts_filtered(state_filter):
     return jsonify(hosts)
 
 
-@app.route('/services')
-@app.route('/services/<state_filter>')
+@bp.route('/services')
+@bp.route('/services/<state_filter>')
 @optional_login_required
 def services_overview(state_filter='all'):
     """Services overview page filtered by state"""
     return render_template('services_overview.html', state_filter=state_filter)
 
 
-@app.route('/api/services/filter/<state_filter>')
+@bp.route('/api/services/filter/<state_filter>')
 @optional_login_required
 def api_services_filtered(state_filter):
     """Get services filtered by state"""
@@ -508,14 +511,14 @@ def api_services_filtered(state_filter):
     return jsonify(services)
 
 
-@app.route('/host/<hostname>')
+@bp.route('/host/<hostname>')
 @optional_login_required
 def host_details(hostname):
     """Host details page"""
     return render_template('host_details.html', hostname=hostname)
 
 
-@app.route('/api/host/<hostname>')
+@bp.route('/api/host/<hostname>')
 @optional_login_required
 def api_host_details(hostname):
     """Get detailed information for a specific host"""
@@ -527,14 +530,14 @@ def api_host_details(hostname):
     })
 
 
-@app.route('/service/<hostname>/<path:servicename>')
+@bp.route('/service/<hostname>/<path:servicename>')
 @optional_login_required
 def service_details(hostname, servicename):
     """Service details page"""
     return render_template('service_details.html', hostname=hostname, servicename=servicename)
 
 
-@app.route('/api/service/<hostname>/<path:servicename>')
+@bp.route('/api/service/<hostname>/<path:servicename>')
 @optional_login_required
 def api_service_details(hostname, servicename):
     """Get detailed information for a specific service"""
@@ -544,11 +547,10 @@ def api_service_details(hostname, servicename):
         'service': service,
         'host': host
     })
-    return jsonify({
-        'host': host,
-        'services': services
-    })
 
+
+# Register blueprint
+app.register_blueprint(bp)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
