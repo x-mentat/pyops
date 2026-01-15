@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, Blueprint
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 import requests
 from requests.auth import HTTPBasicAuth
 import os
@@ -15,8 +16,9 @@ APP_PREFIX = os.getenv('APP_PREFIX', '').rstrip('/')
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
-if APP_PREFIX:
-    app.config['APPLICATION_ROOT'] = APP_PREFIX
+
+# Apply ProxyFix middleware for reverse proxy support
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Create blueprint with prefix support
 bp = Blueprint('main', __name__, url_prefix=APP_PREFIX if APP_PREFIX else None)
