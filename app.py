@@ -7,11 +7,26 @@ import os
 from dotenv import load_dotenv
 import ldap3
 from ldap3 import Server, Connection, ALL, NTLM
+import logging
+from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler('pyops-dashboard.log', maxBytes=10485760, backupCount=5),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # Application prefix for reverse proxy support
 APP_PREFIX = os.getenv('APP_PREFIX', '').rstrip('/')
+
+logger.info("Starting PyOPS Dashboard application")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
@@ -28,6 +43,8 @@ AUTH_ENABLED = os.getenv('AUTH_ENABLED', 'true').lower() == 'true'
 FALLBACK_USERNAME = os.getenv('FALLBACK_USERNAME')
 FALLBACK_PASSWORD = os.getenv('FALLBACK_PASSWORD')
 
+logger.info(f"Authentication enabled: {AUTH_ENABLED}")
+
 # LDAP Configuration
 LDAP_SERVER = os.getenv('LDAP_SERVER')
 LDAP_PORT = int(os.getenv('LDAP_PORT', '389'))
@@ -37,10 +54,15 @@ LDAP_BASE_DN = os.getenv('LDAP_BASE_DN')  # e.g., 'DC=company,DC=local'
 LDAP_USER_FILTER = os.getenv('LDAP_USER_FILTER', '(sAMAccountName={username})')
 LDAP_ALLOWED_GROUPS = os.getenv('LDAP_ALLOWED_GROUPS')  # Comma-separated group names
 
+if LDAP_SERVER:
+    logger.info(f"LDAP configured: {LDAP_SERVER}:{LDAP_PORT} (SSL: {LDAP_USE_SSL}, Domain: {LDAP_DOMAIN})")
+
 # Icinga2 API Configuration
 ICINGA_URL = os.getenv('ICINGA_URL')
 ICINGA_USER = os.getenv('ICINGA_USER')
 ICINGA_PASSWORD = os.getenv('ICINGA_PASSWORD')
+
+logger.info(f"Icinga2 API configured: {ICINGA_URL}")
 
 # Flask-Login setup
 login_manager = LoginManager()
@@ -97,8 +119,10 @@ def optional_login_required(f):
 def authenticate_ldap(username, password):
     """Authenticate user against Active Directory LDAP"""
     if not LDAP_SERVER:
-        print("LDAP server not configured")
+        logger.warning("LDAP authentication attempted but LDAP server not configured")
         return None
+    
+    logger.info(f"LDAP authentication attempt for user: {username}")
     
     try:
         # Create LDAP server connection
@@ -109,13 +133,18 @@ def authenticate_ldap(username, password):
             get_info=ALL
         )
         
+        logger.debug(f"LDAP server object created: {LDAP_SERVER}:{LDAP_PORT} (SSL: {LDAP_USE_SSL})")
+        
         # Try authentication with NTLM (domain\username format)
         if LDAP_DOMAIN:
             user_dn = f"{LDAP_DOMAIN}\\{username}"
+            logger.debug(f"Using NTLM authentication with DN: {user_dn}")
         else:
             user_dn = f"{username}@{LDAP_BASE_DN}"
+            logger.debug(f"Using SIMPLE authentication with DN: {user_dn}")
         
         # Attempt to bind (authenticate)
+        logger.debug(f"Attempting LDAP bind for user: {username}")
         conn = Connection(
             server,
             user=user_dn,
@@ -124,12 +153,16 @@ def authenticate_ldap(username, password):
             auto_bind=True
         )
         
+        logger.info(f"LDAP bind successful for user: {username}")
+        
         # If bind successful, fetch user details
         user_info = {'username': username, 'display_name': username, 'email': None}
         
         if LDAP_BASE_DN:
             # Search for user details
             search_filter = LDAP_USER_FILTER.format(username=username)
+            logger.debug(f"Searching LDAP with filter: {search_filter} in base DN: {LDAP_BASE_DN}")
+            
             conn.search(
                 search_base=LDAP_BASE_DN,
                 search_filter=search_filter,
@@ -141,11 +174,14 @@ def authenticate_ldap(username, password):
                 user_info['display_name'] = str(entry.displayName) if hasattr(entry, 'displayName') else username
                 user_info['email'] = str(entry.mail) if hasattr(entry, 'mail') else None
                 
+                logger.info(f"LDAP user details found - Display name: {user_info['display_name']}, Email: {user_info['email']}")
+                
                 # Check group membership if LDAP_ALLOWED_GROUPS is configured
                 if LDAP_ALLOWED_GROUPS:
                     allowed_groups = [g.strip() for g in LDAP_ALLOWED_GROUPS.split(',')]
                     user_groups = []
                     
+                    logger.debug(f"Checking group membership. Allowed groups: {allowed_groups}")
                     if hasattr(entry, 'memberOf'):
                         # Extract group names from DN format
                         for group_dn in entry.memberOf:
@@ -154,20 +190,25 @@ def authenticate_ldap(username, password):
                             if len(group_parts) > 1:
                                 user_groups.append(group_parts[1])
                     
+                    logger.debug(f"User groups found: {user_groups}")
+                    
                     # Check if user is in any allowed group
                     if not any(group in allowed_groups for group in user_groups):
-                        print(f"User {username} not in allowed groups. User groups: {user_groups}, Allowed: {allowed_groups}")
+                        logger.warning(f"LDAP authorization failed for user {username}. User groups: {user_groups}, Allowed groups: {allowed_groups}")
                         conn.unbind()
                         return None
+                    
+                    logger.info(f"User {username} authorized via group membership: {[g for g in user_groups if g in allowed_groups]}")
         
         conn.unbind()
+        logger.info(f"LDAP authentication successful for user: {username}")
         return user_info
         
-    except ldap3.core.exceptions.LDAPBindError:
-        print(f"LDAP authentication failed for user: {username}")
+    except ldap3.core.exceptions.LDAPBindError as e:
+        logger.error(f"LDAP bind failed for user {username}: {str(e)}")
         return None
     except Exception as e:
-        print(f"LDAP error: {e}")
+        logger.error(f"LDAP authentication error for user {username}: {str(e)}", exc_info=True)
         return None
 
 
@@ -197,6 +238,8 @@ class Icinga2API:
         # Build headers
         headers = {'Accept': 'application/json'}
         
+        logger.debug(f"Icinga2 API request: {method} {url}")
+        
         try:
             if method in ['POST', 'PUT']:
                 # For POST/PUT requests, send data as JSON body
@@ -222,9 +265,10 @@ class Icinga2API:
                 )
             
             response.raise_for_status()
+            logger.debug(f"Icinga2 API request successful: {method} {endpoint}")
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"API request failed: {e}")
+            logger.error(f"Icinga2 API request failed: {method} {url} - {str(e)}")
             return None
     
     def get_hosts(self, state=None):
@@ -423,12 +467,14 @@ def login():
     """Login page"""
     # If authentication is disabled, auto-login as guest
     if not AUTH_ENABLED:
+        logger.debug("Authentication disabled, auto-login as guest")
         user = User(username='guest', display_name='Guest User')
         session['user_data'] = {'username': 'guest', 'display_name': 'Guest User', 'email': None}
         login_user(user)
         return redirect(url_for('main.dashboard'))
     
     if current_user.is_authenticated:
+        logger.debug(f"User {current_user.username} already authenticated, redirecting to dashboard")
         return redirect(url_for('main.dashboard'))
     
     if request.method == 'POST':
@@ -436,7 +482,10 @@ def login():
         password = request.form.get('password')
         remember = request.form.get('remember', False)
         
+        logger.info(f"Login attempt for user: {username} from IP: {request.remote_addr}")
+        
         if not username or not password:
+            logger.warning(f"Login attempt with missing credentials from IP: {request.remote_addr}")
             flash('Please enter both username and password.', 'danger')
             return render_template('login.html', auth_enabled=AUTH_ENABLED)
         
@@ -445,15 +494,19 @@ def login():
         
         # Try LDAP authentication first
         if LDAP_SERVER:
+            logger.debug(f"Attempting LDAP authentication for user: {username}")
             user_info = authenticate_ldap(username, password)
             if user_info:
                 auth_method = 'LDAP'
+                logger.info(f"LDAP authentication successful for user: {username}")
         
         # If LDAP failed or not configured, try fallback credentials
         if not user_info and FALLBACK_USERNAME:
+            logger.debug(f"Attempting fallback authentication for user: {username}")
             user_info = authenticate_fallback(username, password)
             if user_info:
                 auth_method = 'Fallback'
+                logger.info(f"Fallback authentication successful for user: {username}")
                 flash('Using fallback authentication. LDAP may be unavailable.', 'warning')
         
         if user_info:
@@ -469,12 +522,14 @@ def login():
             
             # Log the user in
             login_user(user, remember=remember)
+            logger.info(f"User {username} logged in successfully via {auth_method} from IP: {request.remote_addr}")
             flash(f'Welcome, {user.display_name}!', 'success')
             
             # Redirect to next page or dashboard
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('main.dashboard'))
         else:
+            logger.warning(f"Failed login attempt for user: {username} from IP: {request.remote_addr}")
             flash('Invalid username or password. Please try again.', 'danger')
     
     return render_template('login.html', auth_enabled=AUTH_ENABLED)
@@ -484,6 +539,8 @@ def login():
 @login_required
 def logout():
     """Logout user"""
+    username = current_user.username if current_user.is_authenticated else 'unknown'
+    logger.info(f"User {username} logged out from IP: {request.remote_addr}")
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
