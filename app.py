@@ -189,23 +189,38 @@ class Icinga2API:
     def __init__(self, url, username, password):
         self.url = url.rstrip('/')
         self.auth = HTTPBasicAuth(username, password)
-        self.headers = {
-            'Accept': 'application/json',
-            'X-HTTP-Method-Override': 'GET'
-        }
     
     def _request(self, endpoint, method='GET', data=None):
         """Make API request to Icinga2"""
         url = f"{self.url}/v1/{endpoint}"
+        
+        # Build headers
+        headers = {'Accept': 'application/json'}
+        
         try:
-            response = requests.request(
-                method,
-                url,
-                auth=self.auth,
-                headers=self.headers,
-                json=data,
-                verify=False  # Disable SSL verification - set to True in production
-            )
+            if method in ['POST', 'PUT']:
+                # For POST/PUT requests, send data as JSON body
+                response = requests.request(
+                    method,
+                    url,
+                    auth=self.auth,
+                    headers=headers,
+                    json=data,
+                    verify=False
+                )
+            else:
+                # For GET requests with filters, use X-HTTP-Method-Override
+                if data:
+                    headers['X-HTTP-Method-Override'] = 'GET'
+                response = requests.request(
+                    method,
+                    url,
+                    auth=self.auth,
+                    headers=headers,
+                    json=data,
+                    verify=False
+                )
+            
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -326,6 +341,77 @@ class Icinga2API:
             'hosts': host_stats,
             'services': service_stats
         }
+    
+    def reschedule_host_check(self, hostname):
+        """Trigger immediate check for a host"""
+        import time
+        data = {
+            'type': 'Host',
+            'filter': f'host.name == "{hostname}"',
+            'next_check': time.time(),  # Schedule check for right now
+            'force': True  # Force the check to run immediately
+        }
+        response = self._request('actions/reschedule-check', method='POST', data=data)
+        return response
+    
+    def reschedule_service_check(self, hostname, servicename):
+        """Trigger immediate check for a service"""
+        import time
+        service_full_name = f"{hostname}!{servicename}"
+        data = {
+            'type': 'Service',
+            'filter': f'service.name == "{service_full_name}"',
+            'next_check': time.time(),  # Schedule check for right now
+            'force': True  # Force the check to run immediately
+        }
+        response = self._request('actions/reschedule-check', method='POST', data=data)
+        return response
+    
+    def acknowledge_host_problem(self, hostname, author, comment):
+        """Acknowledge a host problem"""
+        data = {
+            'type': 'Host',
+            'filter': f'host.name == "{hostname}"',
+            'author': author,
+            'comment': comment,
+            'sticky': True,
+            'notify': True
+        }
+        response = self._request('actions/acknowledge-problem', method='POST', data=data)
+        return response
+    
+    def acknowledge_service_problem(self, hostname, servicename, author, comment):
+        """Acknowledge a service problem"""
+        service_full_name = f"{hostname}!{servicename}"
+        data = {
+            'type': 'Service',
+            'filter': f'service.name == "{service_full_name}"',
+            'author': author,
+            'comment': comment,
+            'sticky': True,
+            'notify': True
+        }
+        response = self._request('actions/acknowledge-problem', method='POST', data=data)
+        return response
+    
+    def remove_host_acknowledgement(self, hostname):
+        """Remove acknowledgement from a host"""
+        data = {
+            'type': 'Host',
+            'filter': f'host.name == "{hostname}"'
+        }
+        response = self._request('actions/remove-acknowledgement', method='POST', data=data)
+        return response
+    
+    def remove_service_acknowledgement(self, hostname, servicename):
+        """Remove acknowledgement from a service"""
+        service_full_name = f"{hostname}!{servicename}"
+        data = {
+            'type': 'Service',
+            'filter': f'service.name == "{service_full_name}"'
+        }
+        response = self._request('actions/remove-acknowledgement', method='POST', data=data)
+        return response
 
 
 # Initialize API client
@@ -532,6 +618,43 @@ def api_host_details(hostname):
     })
 
 
+@bp.route('/api/host/<hostname>/check', methods=['POST'])
+@optional_login_required
+def api_trigger_host_check(hostname):
+    """Trigger immediate check for a host"""
+    result = icinga.reschedule_host_check(hostname)
+    if result:
+        return jsonify({'success': True, 'message': f'Check triggered for host {hostname}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to trigger check'}), 500
+
+
+@bp.route('/api/host/<hostname>/acknowledge', methods=['POST'])
+@optional_login_required
+def api_acknowledge_host(hostname):
+    """Acknowledge a host problem"""
+    data = request.get_json()
+    comment = data.get('comment', 'Acknowledged via dashboard')
+    author = current_user.username if current_user.is_authenticated else 'dashboard'
+    
+    result = icinga.acknowledge_host_problem(hostname, author, comment)
+    if result:
+        return jsonify({'success': True, 'message': f'Host {hostname} acknowledged'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to acknowledge'}), 500
+
+
+@bp.route('/api/host/<hostname>/remove-acknowledgement', methods=['POST'])
+@optional_login_required
+def api_remove_host_acknowledgement(hostname):
+    """Remove acknowledgement from a host"""
+    result = icinga.remove_host_acknowledgement(hostname)
+    if result:
+        return jsonify({'success': True, 'message': f'Acknowledgement removed from host {hostname}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to remove acknowledgement'}), 500
+
+
 @bp.route('/service/<hostname>/<path:servicename>')
 @optional_login_required
 def service_details(hostname, servicename):
@@ -549,6 +672,43 @@ def api_service_details(hostname, servicename):
         'service': service,
         'host': host
     })
+
+
+@bp.route('/api/service/<hostname>/<path:servicename>/check', methods=['POST'])
+@optional_login_required
+def api_trigger_service_check(hostname, servicename):
+    """Trigger immediate check for a service"""
+    result = icinga.reschedule_service_check(hostname, servicename)
+    if result:
+        return jsonify({'success': True, 'message': f'Check triggered for service {servicename}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to trigger check'}), 500
+
+
+@bp.route('/api/service/<hostname>/<path:servicename>/acknowledge', methods=['POST'])
+@optional_login_required
+def api_acknowledge_service(hostname, servicename):
+    """Acknowledge a service problem"""
+    data = request.get_json()
+    comment = data.get('comment', 'Acknowledged via dashboard')
+    author = current_user.username if current_user.is_authenticated else 'dashboard'
+    
+    result = icinga.acknowledge_service_problem(hostname, servicename, author, comment)
+    if result:
+        return jsonify({'success': True, 'message': f'Service {servicename} acknowledged'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to acknowledge'}), 500
+
+
+@bp.route('/api/service/<hostname>/<path:servicename>/remove-acknowledgement', methods=['POST'])
+@optional_login_required
+def api_remove_service_acknowledgement(hostname, servicename):
+    """Remove acknowledgement from a service"""
+    result = icinga.remove_service_acknowledgement(hostname, servicename)
+    if result:
+        return jsonify({'success': True, 'message': f'Acknowledgement removed from service {servicename}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to remove acknowledgement'}), 500
 
 
 # Register blueprint
