@@ -13,6 +13,7 @@
             --color-critical: #dc3545;
             --color-unknown: #6c757d;
             --color-unreachable: #17a2b8;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
         body {
@@ -42,6 +43,15 @@
             padding: 20px;
             text-align: center;
             cursor: pointer;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
         }
 
         .stat-number {
@@ -50,11 +60,39 @@
             margin: 10px 0;
         }
 
+        .stat-number:not(.status-ok):not(.status-warning):not(.status-critical):not(.status-unknown):not(.status-unreachable) {
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-number.status-ok {
+            color: var(--color-ok);
+        }
+
+        .stat-number.status-warning {
+            color: var(--color-warning);
+        }
+
+        .stat-number.status-critical {
+            color: var(--color-critical);
+        }
+
+        .stat-number.status-unknown {
+            color: var(--color-unknown);
+        }
+
+        .stat-number.status-unreachable {
+            color: var(--color-unreachable);
+        }
+
         .stat-label {
             font-size: 1rem;
             color: #6c757d;
             text-transform: uppercase;
             letter-spacing: 1px;
+            font-weight: 600;
         }
 
         .status-ok { color: var(--color-ok); }
@@ -68,10 +106,180 @@
         .bg-critical { background-color: var(--color-critical); }
         .bg-unknown { background-color: var(--color-unknown); }
 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
         .header-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary-gradient);
             color: white;
             padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Premium Enhanced Group Tabs */
+        .group-tabs-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.18);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.35s ease;
+        }
+
+        .group-tabs-card:hover {
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.22);
+        }
+
+        .group-tabs-card .card-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 20px 25px;
+            border: none;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .group-tabs-card .card-header .bi {
+            margin-right: 0.75rem;
+            font-size: 1.3rem;
+        }
+
+        .group-tabs-card .nav-pills {
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(to bottom, #f8f9fa, #ffffff);
+            border-bottom: 1px solid #e8e8e8;
+            margin-bottom: 0;
+            align-items: center;
+        }
+
+        .group-tabs-card .nav-link {
+            background-color: white;
+            color: #495057;
+            border: 2px solid #d4d4d4;
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .group-tabs-card .nav-link::before {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 3px;
+            background: var(--primary-gradient);
+            border-radius: 2px;
+            transition: width 0.35s ease;
+        }
+
+        .group-tabs-card .nav-link:hover {
+            background-color: #f5f5f5;
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 18px rgba(102, 126, 234, 0.25);
+        }
+
+        .group-tabs-card .nav-link:hover::before {
+            width: 60%;
+        }
+
+        .group-tabs-card .nav-link.active {
+            background: var(--primary-gradient);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+            font-weight: 700;
+        }
+
+        .group-tabs-card .nav-link.active::before {
+            width: 100%;
+        }
+
+        .group-tabs-card .tab-content {
+            padding: 20px;
+            background-color: white;
+            min-height: 250px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .group-tabs-card .list-group-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            padding: 12px;
+            background-color: #fafafa;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-tabs-card .list-group-item:hover {
+            transform: translateX(6px);
+            background-color: #ffffff;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.18);
+        }
+
+        .group-tabs-card .badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            color: white;
+            letter-spacing: 0.5px;
+        }
+
+        .group-tabs-card .list-group-item .badge {
+            background: var(--color-ok);
+            color: white;
+        }
+
+        .group-tabs-card .list-group-item .badge.bg-success {
+            background: var(--color-ok) !important;
+        }
+
+        .group-tabs-card .list-group-item .badge.bg-danger {
+            background: var(--color-critical) !important;
+        }
+
+        .group-tabs-card .list-group-item .badge.bg-info {
+            background: var(--color-unreachable) !important;
+        }
+
+        .group-tabs-card .list-group-item .badge.bg-warning {
+            background: var(--color-warning) !important;
+            color: #000;
         }
 
         .problem-item {
@@ -277,6 +485,21 @@
             </div>
         </div>
 
+        <!-- Host Groups Section with Enhanced Design -->
+        <div class="group-tabs-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-collection"></i> Host Groups</h5>
+            </div>
+            <ul class="nav nav-pills" id="groupTabs" role="tablist">
+                <!-- populated dynamically -->
+            </ul>
+            <div class="tab-content" id="groupTabContent">
+                <div class="text-muted text-center py-5" id="groupEmpty">
+                    <i class="bi bi-hourglass-split"></i> Loading groups...
+                </div>
+            </div>
+        </div>
+
         <!-- Problems Section -->
         <div class="row">
             <div class="col-md-6">
@@ -335,6 +558,20 @@
                 updateStats(data);
             } catch (error) {
                 console.error('Error fetching stats:', error);
+            }
+        }
+
+        async function fetchGroups() {
+            try {
+                const response = await fetch('/api/hostgroups');
+                const data = await response.json();
+                renderGroups(data);
+            } catch (error) {
+                console.error('Error fetching groups:', error);
+                const content = document.getElementById('groupTabContent');
+                if (content) {
+                    content.innerHTML = '<div class="text-danger text-center py-3"><i class="bi bi-exclamation-triangle"></i> Error loading groups</div>';
+                }
             }
         }
 
@@ -450,6 +687,93 @@
             }
         }
 
+        function renderGroups(groups) {
+            const tabs = document.getElementById('groupTabs');
+            const content = document.getElementById('groupTabContent');
+
+            if (!tabs || !content) {
+                console.error('Missing group tab containers');
+                return;
+            }
+
+            if (!groups || groups.length === 0) {
+                content.innerHTML = '<div class="text-muted text-center py-5"><i class="bi bi-inbox"></i> No host groups found</div>';
+                return;
+            }
+
+            tabs.innerHTML = '';
+            content.innerHTML = '';
+
+            groups.forEach((group, idx) => {
+                const name = group.name || group.attrs?.name || 'Unnamed';
+                const tabId = `group-${idx}`;
+
+                const li = document.createElement('li');
+                li.className = 'nav-item';
+                li.role = 'presentation';
+                li.innerHTML = `
+                    <button class="nav-link ${idx === 0 ? 'active' : ''}" id="${tabId}-tab" data-bs-toggle="tab" data-bs-target="#${tabId}" type="button" role="tab" aria-controls="${tabId}" aria-selected="${idx === 0}">
+                        ${name} <span class="badge bg-light text-dark ms-2" id="${tabId}-badge">0</span>
+                    </button>
+                `;
+                tabs.appendChild(li);
+
+                const pane = document.createElement('div');
+                pane.className = `tab-pane fade ${idx === 0 ? 'show active' : ''}`;
+                pane.id = tabId;
+                pane.role = 'tabpanel';
+                pane.innerHTML = `<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Loading hosts...</div>`;
+                content.appendChild(pane);
+
+                // load hosts for this group
+                loadGroupHosts(name, tabId);
+            });
+        }
+
+        async function loadGroupHosts(groupName, tabId) {
+            const pane = document.getElementById(tabId);
+            const badge = document.getElementById(`${tabId}-badge`);
+            try {
+                const response = await fetch(`/api/hosts/group/${encodeURIComponent(groupName)}`);
+                const hosts = await response.json();
+                
+                // Update badge with actual count
+                const count = hosts ? hosts.length : 0;
+                if (badge) badge.textContent = count;
+                
+                if (!hosts || hosts.length === 0) {
+                    pane.innerHTML = '<div class="text-muted py-3">No hosts in this group.</div>';
+                    return;
+                }
+                let html = '<div class="list-group">';
+                hosts.forEach(host => {
+                    const attrs = host.attrs;
+                    const state = attrs.state;
+                    const stateMap = {
+                        0: { badge: 'bg-success', label: 'UP' },
+                        1: { badge: 'bg-danger', label: 'DOWN' },
+                        2: { badge: 'bg-info', label: 'UNREACHABLE' }
+                    };
+                    const stateInfo = stateMap[state] || stateMap[0];
+                    html += `
+                        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="/host/${encodeURIComponent(attrs.name)}">
+                            <div>
+                                <strong>${attrs.name}</strong>
+                                <div class="text-muted small">${attrs.address || ''}</div>
+                            </div>
+                            <span class="badge ${stateInfo.badge}">${stateInfo.label}</span>
+                        </a>
+                    `;
+                });
+                html += '</div>';
+                pane.innerHTML = html;
+            } catch (e) {
+                console.error('Error loading group hosts', e);
+                if (badge) badge.textContent = '0';
+                pane.innerHTML = '<div class="text-danger py-3">Error loading hosts for this group.</div>';
+            }
+        }
+
         function updateLastUpdated() {
             const now = new Date();
             document.getElementById('lastUpdated').textContent = now.toLocaleString();
@@ -457,7 +781,7 @@
 
         async function refreshData() {
             updateLastUpdated();
-            await Promise.all([fetchStats(), fetchProblems()]);
+            await Promise.all([fetchStats(), fetchProblems(), fetchGroups()]);
         }
 
         // Initial load

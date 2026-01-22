@@ -318,6 +318,23 @@ class Icinga2API:
         if response and 'results' in response and len(response['results']) > 0:
             return response['results'][0]
         return None
+
+    def get_host_groups(self):
+        """List host groups with their members"""
+        response = self._request('objects/hostgroups')
+        if response and 'results' in response:
+            return response['results']
+        return []
+
+    def get_hosts_by_group(self, group_name):
+        """Get hosts belonging to a specific group"""
+        data = {
+            'filter': f'"{group_name}" in host.groups'
+        }
+        response = self._request('objects/hosts', data=data)
+        if response and 'results' in response:
+            return response['results']
+        return []
     
     def get_host_problems(self):
         """Get hosts with problems"""
@@ -401,10 +418,9 @@ class Icinga2API:
     def reschedule_service_check(self, hostname, servicename):
         """Trigger immediate check for a service"""
         import time
-        service_full_name = f"{hostname}!{servicename}"
         data = {
             'type': 'Service',
-            'filter': f'service.name == "{service_full_name}"',
+            'filter': f'host.name == "{hostname}" && service.name == "{servicename}"',
             'next_check': time.time(),  # Schedule check for right now
             'force': True  # Force the check to run immediately
         }
@@ -597,6 +613,22 @@ def api_problems():
         'hosts': host_problems,
         'services': service_problems
     })
+
+
+@bp.route('/api/hostgroups')
+@optional_login_required
+def api_hostgroups():
+    """Get host groups"""
+    groups = icinga.get_host_groups()
+    return jsonify(groups)
+
+
+@bp.route('/api/hosts/group/<path:group_name>')
+@optional_login_required
+def api_hosts_by_group(group_name):
+    """Get hosts by hostgroup"""
+    hosts = icinga.get_hosts_by_group(group_name)
+    return jsonify(hosts)
 
 
 @bp.route('/hosts')
