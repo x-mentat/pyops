@@ -1,5 +1,7 @@
 # Icinga2 Flask Dashboard
 
+![PyOps Dashboard](pyops.png)
+
 A beautiful and responsive monitoring dashboard for Icinga2 using Flask and the Icinga2 API with Active Directory authentication.
 
 ## Features
